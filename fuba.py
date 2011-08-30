@@ -11,7 +11,7 @@ class Team(object):
 
     def __repr__(self):
         """represent this object with its name"""
-        return self.name
+        return "Team(\"%s\")" % self.name
 
 class Game():
     """A game played between two teams"""
@@ -23,8 +23,25 @@ class League():
     The league contains the teams that play in it and the games played.
 
     >>> league = League("csv/0001/D1.csv")
-    >>> league.teams
-    {'Cottbus': Cottbus, 'Wolfsburg': Wolfsburg, 'Leverkusen': Leverkusen, 'Dortmund': Dortmund, 'Hertha': Hertha, 'Kaiserslautern': Kaiserslautern, 'Schalke 04': Schalke 04, 'Stuttgart': Stuttgart, 'Bochum': Bochum, 'Munich 1860': Munich 1860, 'Hamburg': Hamburg, 'Freiburg': Freiburg, 'Ein Frankfurt': Ein Frankfurt, 'Bayern Munich': Bayern Munich, 'Werder Bremen': Werder Bremen, 'FC Koln': FC Koln, 'Hansa Rostock': Hansa Rostock, 'Unterhaching': Unterhaching}
+    >>> league.teams # doctest: +NORMALIZE_WHITESPACE
+    {'Cottbus': Team("Cottbus"), 
+            'Wolfsburg': Team("Wolfsburg"),
+            'Leverkusen': Team("Leverkusen"),
+            'Dortmund': Team("Dortmund"),
+            'Hertha': Team("Hertha"),
+            'Kaiserslautern': Team("Kaiserslautern"),
+            'Schalke 04': Team("Schalke 04"),
+            'Stuttgart': Team("Stuttgart"),
+            'Bochum': Team("Bochum"),
+            'Munich 1860': Team("Munich 1860"), 
+            'Hamburg': Team("Hamburg"), 
+            'Freiburg': Team("Freiburg"), 
+            'Ein Frankfurt': Team("Ein Frankfurt"), 
+            'Bayern Munich': Team("Bayern Munich"), 
+            'Werder Bremen': Team("Werder Bremen"), 
+            'FC Koln': Team("FC Koln"), 
+            'Hansa Rostock': Team("Hansa Rostock"), 
+            'Unterhaching': Team("Unterhaching")}
     """
     def __init__(self, fname):
         csv_file = file(fname)
