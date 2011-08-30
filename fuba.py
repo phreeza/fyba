@@ -13,11 +13,18 @@ class Team(object):
         """represent this object with its name"""
         return "Team(\"%s\")" % self.name
 
+    def __str__(self):
+        "return team name"
+        return self.name
+
 class Game():
     """A game played between two teams"""
     def __init__(self, hometeam, awayteam, homescore, awayscore):
-        (self.hometeam, awayteam, homescore, awayscore) = (hometeam, 
+        (self.hometeam, self.awayteam, self.homescore, self.awayscore) = (hometeam, 
                 awayteam, homescore, awayscore)
+    def __str__(self):
+        return "Game %s - %s (%i:%i)" % (self.hometeam, self.awayteam,
+                self.homescore, self.awayscore)
 class League():
     """
     The league contains the teams that play in it and the games played.
