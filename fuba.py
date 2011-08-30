@@ -33,3 +33,9 @@ class League():
             data.append(line.split(','))
         teamnames = set(t[3] for t in data[1:])
         self.teams = dict((t,Team(t)) for t in teamnames)
+        self.games = []
+        for gameline in data[1:]:
+            self.games.append(Game(
+                self.teams[gameline[2]],self.teams[gameline[3]],
+                int(gameline[4]), int(gameline[5])
+                ))
