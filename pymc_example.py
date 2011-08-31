@@ -1,7 +1,7 @@
-from pymc import DiscreteUniform, Exponential, deterministic, Poisson, Uniform
+from pymc import DiscreteUniform, Exponential, deterministic, Poisson
 import numpy as np
 
-disasters_array = np.array([ 4, 5, 4, 0, 1, 4, 3, 4,
+goals_array = np.array([ 4, 5, 4, 0, 1, 4, 3, 4,
     0, 6, 3, 3, 4, 0, 2, 6,3 , 3, 5, 4, 5, 3, 1, 4,
     4, 1, 5, 5, 3, 4, 2, 5, 2, 2, 3, 4, 2, 1, 3, 2,
     2, 1, 1, 1, 1, 3, 0, 0, 1, 0, 1, 1, 0, 0, 3, 1,
@@ -10,17 +10,13 @@ disasters_array = np.array([ 4, 5, 4, 0, 1, 4, 3, 4,
     1, 2, 4, 2, 0, 0, 1, 4, 0, 0, 0, 1, 0, 0, 0, 0,
     0, 1, 0, 0, 1, 0, 1])
 
-s = DiscreteUniform('s', lower=0, upper=110, doc='Switchpoint[year]')
+N = 18
+goal_rate = np.empty(N,dtype=object)
+match_rate = np.empty(len(goals_array),dtype=object)
 
-e = Exponential('e', beta=1)
-l = Exponential('l', beta=1)
+for team in range(N):
+    goal_rate[team] = Exponential('goal_rate_%i'%team,beta=1)
 
-@deterministic(plot=False)
-def r(s=s, e=e, l=l):
-    """ Concatenate Poisson means """
-    out = np.empty(len(disasters_array))
-    out[:s] = e
-    out[s:] = l
-    return out
-
-D = Poisson('D', mu=r, value=disasters_array, observed=True)
+for game in range(len(goals_array)):
+    match_rate[game] = Poisson('match_rate_%i'%game, mu=goal_rate[game%N],
+            value=goals_array[game], observed=True)
