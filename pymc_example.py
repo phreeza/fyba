@@ -9,35 +9,23 @@ class LeagueModel(object):
         super(LeagueModel, self).__init__()
         league = fuba.League(fname)
 
-        goals_array = np.array([ 0, 5, 4, 0, 1, 4, 3, 4,
-            0, 6, 3, 3, 4, 0, 2, 6,3 , 3, 5, 4, 5, 3, 1, 4,
-            4, 1, 5, 5, 3, 4, 2, 5, 2, 2, 3, 4, 2, 1, 3, 2,
-            2, 1, 1, 1, 1, 3, 0, 0, 1, 0, 1, 1, 0, 0, 3, 1,
-            0, 3, 2, 2, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 2,
-            1, 0, 0, 0, 1, 1, 0, 2, 3, 3, 1, 1, 2, 1, 1, 1,
-            1, 2, 4, 2, 0, 0, 1, 4, 0, 0, 0, 1, 0, 0, 0, 0,
-            0, 1, 0, 0, 1, 0, 1])
+        N = len(league.teams)
 
-        N = 18
         self.goal_rate = np.empty(N,dtype=object)
-        self.match_rate = np.empty(len(goals_array),dtype=object)
+        self.match_rate = np.empty(len(league.games)*2,dtype=object)
         self.home_adv = Normal(name = 'home_adv',mu=0,tau=10.)
 
+        for t in league.teams:
+            print t.name,t.team_id
+            self.goal_rate[t.team_id] = Exponential('goal_rate_%i'%t.team_id,beta=1)
 
-        for team in range(N):
-            self.goal_rate[team] = Exponential('goal_rate_%i'%team,beta=1)
-
-        for game in range(len(goals_array)):
-            if game%N == 0:
-                goals_array[game] = 0
-            if (game/N)%2 == 0:
-                self.match_rate[game] = Poisson('match_rate_%i'%game,
-                        mu=self.goal_rate[game%N],
-                        value=goals_array[game], observed=True)
-            else:
-                self.match_rate[game] = Poisson('match_rate_%i'%game,
-                        mu=self.goal_rate[game%N] + self.home_adv,
-                        value=goals_array[game], observed=True)
+        for game in range(len(league.games)):
+            self.match_rate[2*game] = Poisson('match_rate_%i'%(2*game),
+                    mu=self.goal_rate[league.games[game].hometeam.team_id] + self.home_adv,
+                    value=league.games[game].homescore, observed=True)
+            self.match_rate[2*game+1] = Poisson('match_rate_%i'%(2*game+1),
+                    mu=self.goal_rate[league.games[game].hometeam.team_id],
+                    value=league.games[game].homescore, observed=True)
 
 
     def run_mc(self,nsample = 10000):

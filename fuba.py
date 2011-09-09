@@ -8,6 +8,7 @@ class Team(object):
     """Representation of a Team"""
     def __init__(self, name):
         self.name = name
+        self.team_id = -1
 
     def __repr__(self):
         """represent this object with its name"""
@@ -57,6 +58,10 @@ class League():
             data.append(line.split(','))
         teamnames = set(t[3] for t in data[1:])
         self.teams = dict((t,Team(t)) for t in teamnames)
+        index = 0
+        for i in self.teams:
+            i.team_id = index
+            index += 1
         self.games = []
         for gameline in data[1:]:
             self.games.append(Game(
