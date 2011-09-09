@@ -15,11 +15,12 @@ class LeagueModel(object):
         self.match_rate = np.empty(len(league.games)*2,dtype=object)
         self.home_adv = Normal(name = 'home_adv',mu=0,tau=10.)
 
-        for t in league.teams:
+        for t in league.teams.values():
             print t.name,t.team_id
             self.goal_rate[t.team_id] = Exponential('goal_rate_%i'%t.team_id,beta=1)
 
         for game in range(len(league.games)):
+            print league.games[game].homescore
             self.match_rate[2*game] = Poisson('match_rate_%i'%(2*game),
                     mu=self.goal_rate[league.games[game].hometeam.team_id] + self.home_adv,
                     value=league.games[game].homescore, observed=True)

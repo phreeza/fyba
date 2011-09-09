@@ -59,7 +59,7 @@ class League():
         teamnames = set(t[3] for t in data[1:])
         self.teams = dict((t,Team(t)) for t in teamnames)
         index = 0
-        for i in self.teams:
+        for i in self.teams.values():
             i.team_id = index
             index += 1
         self.games = []
