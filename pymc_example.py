@@ -11,7 +11,7 @@ class LeagueModel(object):
 
         N = len(league.teams)
         #dummy future games
-        future_games = [[league.teams["Werder Bremen"],league.teams["Hamburg"]]]
+        future_games = [[league.teams["Werder Bremen"],league.teams["Dortmund"]]]
 
         self.goal_rate = np.empty(N,dtype=object)
         self.match_rate = np.empty(len(league.games)*2,dtype=object)
@@ -36,10 +36,13 @@ class LeagueModel(object):
             self.match_goals_future[2*game+1] = Poisson('match_goals_future_%i'%(2*game+1),
                     mu=self.goal_rate[future_games[game][1].team_id])
 
-    def run_mc(self,nsample = 10000):
+    def run_mc(self,nsample = 10000,interactive=False):
         """run the model using mcmc"""
         from pymc.Matplot import plot
         from pymc import MCMC
-        M = MCMC(self)
-        M.sample(iter=nsample, burn=1000, thin=10)
-        plot(M)
+        self.M = MCMC(self)
+        if interactive:
+            self.M.isample(iter=nsample, burn=1000, thin=10)
+        else:
+            self.M.sample(iter=nsample, burn=1000, thin=10)
+        plot(self.M)
