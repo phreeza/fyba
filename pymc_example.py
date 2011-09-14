@@ -20,14 +20,12 @@ class LeagueModel(object):
             self.goal_rate[t.team_id] = Exponential('goal_rate_%i'%t.team_id,beta=1)
 
         for game in range(len(league.games)):
-            print league.games[game].homescore
             self.match_rate[2*game] = Poisson('match_rate_%i'%(2*game),
                     mu=self.goal_rate[league.games[game].hometeam.team_id] + self.home_adv,
                     value=league.games[game].homescore, observed=True)
             self.match_rate[2*game+1] = Poisson('match_rate_%i'%(2*game+1),
                     mu=self.goal_rate[league.games[game].hometeam.team_id],
                     value=league.games[game].homescore, observed=True)
-
 
     def run_mc(self,nsample = 10000):
         """run the model using mcmc"""
