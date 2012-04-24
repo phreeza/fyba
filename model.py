@@ -45,4 +45,4 @@ class LeagueModel(object):
             self.M.isample(iter=nsample, burn=1000, thin=10)
         else:
             self.M.sample(iter=nsample, burn=1000, thin=10)
-        plot(self.M)
+        #plot(self.M)
