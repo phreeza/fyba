@@ -21,7 +21,7 @@ class Team(object):
 class Game():
     """A game played between two teams"""
     def __init__(self, hometeam, awayteam, homescore, awayscore):
-        (self.hometeam, self.awayteam, self.homescore, self.awayscore) = (hometeam, 
+        (self.hometeam, self.awayteam, self.homescore, self.awayscore) = (hometeam,
                 awayteam, homescore, awayscore)
     def __str__(self):
         return "Game %s - %s (%i:%i)" % (self.hometeam, self.awayteam,
