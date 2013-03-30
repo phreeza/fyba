@@ -1,21 +1,26 @@
 from pymc import Exponential, deterministic, Poisson, Normal
 import numpy as np
-import fuba
 
 
 class LeagueModel(object):
     """MCMC model of a football league."""
-    def __init__(self, fname):
+    
+    #TODO: Spieltage
+    #TODO: Odds
+    #TODO: merge files
+    #TODO: Kelly Bettor
+    #TODO: performance evaluator
+    #TODO: refine model
+    
+    def __init__(self, fname, playedto):
         super(LeagueModel, self).__init__()
-        league = fuba.League(fname)
+        league = League(fname,playedto)
 
         N = len(league.teams)
-        #dummy future games
-        future_games = [[league.teams["Werder Bremen"],league.teams["Dortmund"]]]
 
         self.goal_rate = np.empty(N,dtype=object)
         self.match_rate = np.empty(len(league.games)*2,dtype=object)
-        self.match_goals_future = np.empty(len(future_games)*2,dtype=object)
+        self.match_goals_future = np.empty(len(league.future_games)*2,dtype=object)
         self.home_adv = Normal(name = 'home_adv',mu=0,tau=10.)
 
         for t in league.teams.values():
@@ -30,12 +35,12 @@ class LeagueModel(object):
                     mu=self.goal_rate[league.games[game].hometeam.team_id],
                     value=league.games[game].homescore, observed=True)
 
-        for game in range(len(future_games)):
+        for game in range(len(league.future_games)):
             self.match_goals_future[2*game] = Poisson('match_goals_future_%i'%(2*game),
-                    mu=self.goal_rate[future_games[game][0].team_id] + self.home_adv)
+                    mu=self.goal_rate[league.future_games[game][0].team_id] + self.home_adv)
             self.match_goals_future[2*game+1] = Poisson('match_goals_future_%i'%(2*game+1),
-                    mu=self.goal_rate[future_games[game][1].team_id])
-
+                    mu=self.goal_rate[league.future_games[game][1].team_id])
+            
     def run_mc(self,nsample = 10000,interactive=False):
         """run the model using mcmc"""
         from pymc.Matplot import plot
@@ -46,3 +51,77 @@ class LeagueModel(object):
         else:
             self.M.sample(iter=nsample, burn=1000, thin=10)
         #plot(self.M)
+
+class Team(object):
+    """Representation of a Team"""
+    def __init__(self, name):
+        self.name = name
+        self.team_id = -1
+
+    def __repr__(self):
+        """represent this object with its name"""
+        return "Team(\"%s\")" % self.name
+
+    def __str__(self):
+        "return team name"
+        return self.name
+
+class Game():
+    """A game played between two teams"""
+    def __init__(self, hometeam, awayteam, homescore, awayscore):
+        (self.hometeam, self.awayteam, self.homescore, self.awayscore) = (hometeam,
+                awayteam, homescore, awayscore)
+    def __str__(self):
+        return "Game %s - %s (%i:%i)" % (self.hometeam, self.awayteam,
+                self.homescore, self.awayscore)
+class League():
+    """
+    The league contains the teams that play in it and the games played.
+
+    >>> league = League("csv/0001/D1.csv")
+    >>> league.teams # doctest: +NORMALIZE_WHITESPACE
+    {'Cottbus': Team("Cottbus"), 
+            'Wolfsburg': Team("Wolfsburg"),
+            'Leverkusen': Team("Leverkusen"),
+            'Dortmund': Team("Dortmund"),
+            'Hertha': Team("Hertha"),
+            'Kaiserslautern': Team("Kaiserslautern"),
+            'Schalke 04': Team("Schalke 04"),
+            'Stuttgart': Team("Stuttgart"),
+            'Bochum': Team("Bochum"),
+            'Munich 1860': Team("Munich 1860"), 
+            'Hamburg': Team("Hamburg"), 
+            'Freiburg': Team("Freiburg"), 
+            'Ein Frankfurt': Team("Ein Frankfurt"), 
+            'Bayern Munich': Team("Bayern Munich"), 
+            'Werder Bremen': Team("Werder Bremen"), 
+            'FC Koln': Team("FC Koln"), 
+            'Hansa Rostock': Team("Hansa Rostock"), 
+            'Unterhaching': Team("Unterhaching")}
+    """
+    def __init__(self, fname, playedto=None):
+        csv_file = file(fname)
+        data = []
+        for line in csv_file.readlines():
+            data.append(line.split(','))
+        if playedto is None:
+            playedto = len(data)-1
+        teamnames = set(t[3] for t in data[1:])
+        self.teams = dict((t,Team(t)) for t in teamnames)
+        index = 0
+        for i in self.teams.values():
+            i.team_id = index
+            index += 1
+        self.games = []
+        for gameline in data[1:playedto+1]:
+            self.games.append(Game(
+                self.teams[gameline[2]],self.teams[gameline[3]],
+                int(gameline[4]), int(gameline[5])
+                ))
+
+        self.future_games = []
+        if playedto < len(data)-1:
+            for gameline in data[playedto+1:]:
+                self.future_games.append(
+                    [self.teams[gameline[2]],self.teams[gameline[3]]]
+                    )

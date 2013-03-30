@@ -51,11 +51,13 @@ class League():
             'Hansa Rostock': Team("Hansa Rostock"), 
             'Unterhaching': Team("Unterhaching")}
     """
-    def __init__(self, fname):
+    def __init__(self, fname, playedto=None):
         csv_file = file(fname)
         data = []
         for line in csv_file.readlines():
             data.append(line.split(','))
+        if playedto is None:
+            playedto = len(data)-1
         teamnames = set(t[3] for t in data[1:])
         self.teams = dict((t,Team(t)) for t in teamnames)
         index = 0
@@ -63,8 +65,15 @@ class League():
             i.team_id = index
             index += 1
         self.games = []
-        for gameline in data[1:]:
+        for gameline in data[1:playedto+1]:
             self.games.append(Game(
                 self.teams[gameline[2]],self.teams[gameline[3]],
                 int(gameline[4]), int(gameline[5])
                 ))
+
+        self.future_games = []
+        if playedto < len(data)-1:
+            for gameline in data[playedto+1:]:
+                self.future_games.append(
+                    [self.teams[gameline[2]],self.teams[gameline[3]]]
+                    )
