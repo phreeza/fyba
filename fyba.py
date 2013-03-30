@@ -1,4 +1,4 @@
-from pymc import Exponential, deterministic, Poisson, Normal
+from pymc import Exponential, deterministic, Poisson, Normal, Deterministic, Uniform
 import numpy as np
 
 
@@ -7,21 +7,27 @@ class LeagueModel(object):
     
     #TODO: Spieltage
     #TODO: Odds
-    #TODO: merge files
     #TODO: Kelly Bettor
     #TODO: performance evaluator
     #TODO: refine model
     
-    def __init__(self, fname, playedto):
+    def __init__(self, fname, playedto=None):
         super(LeagueModel, self).__init__()
         league = League(fname,playedto)
 
         N = len(league.teams)
-
+        def outcome_eval(home=None,away=None):
+            if home > away:
+                return 1
+            if home < away:
+                return -1
+            if home == away:
+                return 0
+        
         self.goal_rate = np.empty(N,dtype=object)
         self.match_rate = np.empty(len(league.games)*2,dtype=object)
         self.match_goals_future = np.empty(len(league.future_games)*2,dtype=object)
-        self.home_adv = Normal(name = 'home_adv',mu=0,tau=10.)
+        self.home_adv = Uniform(name = 'home_adv',lower=0.,upper=0.7)
 
         for t in league.teams.values():
             print t.name,t.team_id
@@ -40,10 +46,13 @@ class LeagueModel(object):
                     mu=self.goal_rate[league.future_games[game][0].team_id] + self.home_adv)
             self.match_goals_future[2*game+1] = Poisson('match_goals_future_%i'%(2*game+1),
                     mu=self.goal_rate[league.future_games[game][1].team_id])
+            self.outcome_future[game] = Deterministic(eval=outcome_eval,parents={
+                'home':self.match_goals_future[2*game],
+                'away':self.match_goals_future[2*game+1]},
+                dtype=int,plot=True)
             
     def run_mc(self,nsample = 10000,interactive=False):
         """run the model using mcmc"""
-        from pymc.Matplot import plot
         from pymc import MCMC
         self.M = MCMC(self)
         if interactive:
@@ -51,6 +60,12 @@ class LeagueModel(object):
         else:
             self.M.sample(iter=nsample, burn=1000, thin=10)
         #plot(self.M)
+
+class Prediction(object):
+    """A prediction of outcomes of a group of games"""
+    def __init__(self, M):
+        pass
+    
 
 class Team(object):
     """Representation of a Team"""
