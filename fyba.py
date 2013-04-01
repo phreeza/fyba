@@ -26,8 +26,10 @@ class LeagueModel(object):
         
         self.goal_rate = np.empty(N,dtype=object)
         self.match_rate = np.empty(len(league.games)*2,dtype=object)
+        self.outcome_future = np.empty(len(league.games),dtype=object)
         self.match_goals_future = np.empty(len(league.future_games)*2,dtype=object)
         self.home_adv = Uniform(name = 'home_adv',lower=0.,upper=0.7)
+        self.league = league
 
         for t in league.teams.values():
             print t.name,t.team_id
@@ -42,14 +44,15 @@ class LeagueModel(object):
                     value=league.games[game].homescore, observed=True)
 
         for game in range(len(league.future_games)):
-            self.match_goals_future[2*game] = Poisson('match_goals_future_%i'%(2*game),
+            self.match_goals_future[2*game] = Poisson('match_goals_future_%i_home'%game,
                     mu=self.goal_rate[league.future_games[game][0].team_id] + self.home_adv)
-            self.match_goals_future[2*game+1] = Poisson('match_goals_future_%i'%(2*game+1),
+            self.match_goals_future[2*game+1] = Poisson('match_goals_future_%i_away'%game,
                     mu=self.goal_rate[league.future_games[game][1].team_id])
             self.outcome_future[game] = Deterministic(eval=outcome_eval,parents={
                 'home':self.match_goals_future[2*game],
-                'away':self.match_goals_future[2*game+1]},
-                dtype=int,plot=True)
+                'away':self.match_goals_future[2*game+1]},name='match_outcome_future_%i'%game,
+                dtype=int,doc='The outcome of the match'
+                )
             
     def run_mc(self,nsample = 10000,interactive=False):
         """run the model using mcmc"""
@@ -63,8 +66,15 @@ class LeagueModel(object):
 
 class Prediction(object):
     """A prediction of outcomes of a group of games"""
-    def __init__(self, M):
-        pass
+    def __init__(self, league, outcome_future):
+        self.predictions = []
+        for n,g in enumerate(league.future_games):
+            g = list(g)
+            g.append(float((outcome_future[n].trace()==1).sum())/len(outcome_future[n].trace()))
+            g.append(float((outcome_future[n].trace()==0).sum())/len(outcome_future[n].trace()))
+            g.append(float((outcome_future[n].trace()==-1).sum())/len(outcome_future[n].trace()))
+            self.predictions.append(g)
+        
     
 
 class Team(object):
@@ -119,10 +129,12 @@ class League():
         data = []
         for line in csv_file.readlines():
             data.append(line.split(','))
-        if playedto is None:
-            playedto = len(data)-1
         teamnames = set(t[3] for t in data[1:])
         self.teams = dict((t,Team(t)) for t in teamnames)
+        if playedto is None:
+            playedto = len(data)-1
+        else:
+            playedto *= len(teamnames)/2
         index = 0
         for i in self.teams.values():
             i.team_id = index
@@ -138,5 +150,6 @@ class League():
         if playedto < len(data)-1:
             for gameline in data[playedto+1:]:
                 self.future_games.append(
-                    [self.teams[gameline[2]],self.teams[gameline[3]]]
+                    [self.teams[gameline[2]],self.teams[gameline[3]],gameline[6],
+                     float(gameline[22]),float(gameline[23]),float(gameline[24])]
                     )
