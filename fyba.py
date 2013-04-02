@@ -1,13 +1,16 @@
 from pymc import Exponential, deterministic, Poisson, Normal, Deterministic, Uniform
 import numpy as np
+import pymc as pm
+import pymc.gp as gp
+
 
 
 class LeagueModel(object):
     """MCMC model of a football league."""
     
-    #TODO: Kelly Bettor
+    #TODO: optimal Kelly Bettor
     #TODO: refine model
-    #TODO: identify columns
+    #TODO: identify columns for autotesting
     
     def __init__(self, fname, playedto=None):
         super(LeagueModel, self).__init__()
@@ -25,33 +28,71 @@ class LeagueModel(object):
         def clip_rate(val):
             if val>0.2:return val
             else: return 0.2
-        
-        
+        def linfun(x, c):
+            return 0.*x+ c
+# The covariance dtrm C is valued as a Covariance object.
+        #@pm.deterministic
+        #def C(eval_fun = gp.matern.euclidean, diff_degree=diff_degree, amp=amp, scale=scale):
+        #    return gp.NearlyFullRankCovariance(eval_fun, diff_degree=diff_degree, amp=amp, scale=scale)
+                    
         self.goal_rate = np.empty(N,dtype=object)
         self.def_rate = np.empty(N,dtype=object)
+        self.goal_var = np.empty(N,dtype=object)
+        self.def_var = np.empty(N,dtype=object)
         self.match_rate = np.empty(len(league.games)*2,dtype=object)
         self.outcome_future = np.empty(len(league.games),dtype=object)
         self.match_goals_future = np.empty(len(league.future_games)*2,dtype=object)
-        self.home_adv = Uniform(name = 'home_adv',lower=0.,upper=0.7)
+        self.home_adv = Uniform(name = 'home_adv',lower=0.,upper=2.0)
         self.league = league
+        
+        fmesh = np.arange(0.,league.n_days)            
 
         for t in league.teams.values():
+            # Prior parameters of C
+            diff_degree_g = pm.Uniform('diff_degree_g_%i'%t.team_id, 1., 3)
+            amp_g = pm.Uniform('amp_g_%i'%t.team_id, .01, 2.)
+            scale_g = pm.Uniform('scale_g_%i'%t.team_id, 1., 10.)
+            diff_degree_d = pm.Uniform('diff_degree_d_%i'%t.team_id, 1., 3)
+            amp_d = pm.Uniform('amp_d_%i'%t.team_id, .01, 2.)
+            scale_d = pm.Uniform('scale_d_%i'%t.team_id, 1., 10.)
+            
+            @pm.deterministic(name='C_d%i'%t.team_id)
+            def C_d(eval_fun = gp.matern.euclidean, diff_degree=diff_degree_d, amp=amp_d, scale=scale_d):
+                return gp.NearlyFullRankCovariance(eval_fun, diff_degree=diff_degree, amp=amp, scale=scale)
+            
+            @pm.deterministic(name='C_g%i'%t.team_id)
+            def C_g(eval_fun = gp.matern.euclidean, diff_degree=diff_degree_g, amp=amp_g, scale=scale_g):
+                return gp.NearlyFullRankCovariance(eval_fun, diff_degree=diff_degree, amp=amp, scale=scale)
+            
+            
             self.goal_rate[t.team_id] = Exponential('goal_rate_%i'%t.team_id,beta=1)
             self.def_rate[t.team_id] = Exponential('def_rate_%i'%t.team_id,beta=1)
+            
+            @pm.deterministic(name='M_d%i'%t.team_id)
+            def M_d(eval_fun = linfun, c=self.def_rate[t.team_id]):
+                return gp.Mean(eval_fun, c=c)
+            @pm.deterministic(name='M_g%i'%t.team_id)
+            def M_g(eval_fun = linfun, c=self.goal_rate[t.team_id]):
+                return gp.Mean(eval_fun, c=c)
+            
+            self.def_var[t.team_id] = gp.GPSubmodel('smd_%i'%t.team_id,M_d,C_d,fmesh)
+            self.goal_var[t.team_id] = gp.GPSubmodel('smg_%i'%t.team_id,M_g,C_g,fmesh)
+
 
         for game in range(len(league.games)):
+            gd = int(game/(league.n_teams/2))
             self.match_rate[2*game] = Poisson('match_rate_%i'%(2*game),
                     mu=Deterministic(eval=clip_rate,
                                      parents={'val':
-                                        self.goal_rate[league.games[game].hometeam.team_id] - 
-                                        self.def_rate[league.games[game].awayteam.team_id] + self.home_adv},
+                                        self.goal_var[league.games[game].hometeam.team_id].f_eval[gd] - 
+                                        self.def_var[league.games[game].awayteam.team_id].f_eval[gd] + self.home_adv},
                                      doc='clipped goal rate',name='clipped_h_%i'%game),
                     value=league.games[game].homescore, observed=True)
             self.match_rate[2*game+1] = Poisson('match_rate_%i'%(2*game+1),
                     mu=Deterministic(eval=clip_rate,
                                      parents={'val':
-                                        self.goal_rate[league.games[game].awayteam.team_id] - 
-                                        self.def_rate[league.games[game].hometeam.team_id]},
+                                        self.goal_var[league.games[game].awayteam.team_id].f_eval[gd] - 
+                                        self.def_var[league.games[game].hometeam.team_id].f_eval[gd]},
                                      doc='clipped goal rate',name='clipped_a_%i'%game),
                     value=league.games[game].awayscore, observed=True)
 
@@ -77,15 +118,17 @@ class LeagueModel(object):
                 dtype=int,doc='The outcome of the match'
                 )
             
-    def run_mc(self,nsample = 10000,interactive=False):
+    def run_mc(self,nsample = 30000,interactive=False,doplot=False):
         """run the model using mcmc"""
         from pymc import MCMC
         self.M = MCMC(self)
         if interactive:
-            self.M.isample(iter=nsample, burn=1000, thin=10)
+            self.M.isample(iter=nsample, burn=1000, thin=30)
         else:
-            self.M.sample(iter=nsample, burn=1000, thin=10)
-        #plot(self.M)
+            self.M.sample(iter=nsample, burn=1000, thin=30)
+        if doplot:
+            from pymc.Matplot import plot
+            plot(self.M)
 
 class Prediction(object):
     """A prediction of outcomes of a group of games"""
