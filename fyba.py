@@ -312,7 +312,7 @@ class LeagueMultiHomeModel(object):
     #TODO: identify columns for autotesting
     
     def __init__(self, fname, playedto=None):
-        super(LeagueDefenseModel, self).__init__()
+        super(LeagueMultiHomeModel, self).__init__()
         league = League(fname,playedto)
 
         N = len(league.teams)
