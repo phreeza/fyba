@@ -77,14 +77,14 @@ class LeagueBasicModel(object):
                 dtype=int,doc='The outcome of the match'
                 )
             
-    def run_mc(self,nsample = 30000,interactive=False,doplot=False,verbose=1):
+    def run_mc(self,nsample = 10000,interactive=False,doplot=False,verbose=1):
         """run the model using mcmc"""
         from pymc import MCMC
         self.M = MCMC(self)
         if interactive:
-            self.M.isample(iter=nsample, burn=1000, thin=30,verbose=verbose)
+            self.M.isample(iter=nsample, burn=1000, thin=10,verbose=verbose)
         else:
-            self.M.sample(iter=nsample, burn=1000, thin=30,verbose=verbose)
+            self.M.sample(iter=nsample, burn=1000, thin=10,verbose=verbose)
         if doplot:
             from pymc.Matplot import plot
             plot(self.M)
@@ -250,8 +250,8 @@ class LeagueDefenseModel(object):
         fmesh = np.arange(0.,league.n_days+2.)            
 
         for t in league.teams.values():
-            self.goal_rate[t.team_id] = Exponential('goal_rate_%i'%t.team_id,beta=1)
-            self.def_rate[t.team_id] = Exponential('def_rate_%i'%t.team_id,beta=1)
+            self.goal_rate[t.team_id] = Exponential('goal_rate_%i'%t.team_id,beta=1.)
+            self.def_rate[t.team_id] = Normal('def_rate_%i'%t.team_id,tau=1.,mu=0.)
 
 
         for game in range(len(league.games)):
@@ -292,14 +292,104 @@ class LeagueDefenseModel(object):
                 dtype=int,doc='The outcome of the match'
                 )
             
-    def run_mc(self,nsample = 30000,interactive=False,doplot=False,verbose=1):
+    def run_mc(self,nsample = 10000,interactive=False,doplot=False,verbose=1):
         """run the model using mcmc"""
         from pymc import MCMC
         self.M = MCMC(self)
         if interactive:
-            self.M.isample(iter=nsample, burn=1000, thin=30,verbose=verbose)
+            self.M.isample(iter=nsample, burn=1000, thin=10,verbose=verbose)
         else:
-            self.M.sample(iter=nsample, burn=1000, thin=30,verbose=verbose)
+            self.M.sample(iter=nsample, burn=1000, thin=10,verbose=verbose)
+        if doplot:
+            from pymc.Matplot import plot
+            plot(self.M)
+            
+class LeagueMultiHomeModel(object):
+    """MCMC model of a football league with home advantages per team"""
+    
+    #TODO: optimal Kelly Bettor
+    #TODO: refine model
+    #TODO: identify columns for autotesting
+    
+    def __init__(self, fname, playedto=None):
+        super(LeagueDefenseModel, self).__init__()
+        league = League(fname,playedto)
+
+        N = len(league.teams)
+        def outcome_eval(home=None,away=None):
+            if home > away:
+                return 1
+            if home < away:
+                return -1
+            if home == away:
+                return 0
+            
+        def clip_rate(val):
+            if val>0.2:return val
+            else: return 0.2
+        self.goal_rate = np.empty(N,dtype=object)
+        self.home_adv = np.empty(N,dtype=object)
+        self.def_rate = np.empty(N,dtype=object)
+        self.match_rate = np.empty(len(league.games)*2,dtype=object)
+        self.outcome_future = np.empty(len(league.games),dtype=object)
+        self.match_goals_future = np.empty(len(league.future_games)*2,dtype=object)
+        self.league = league
+        
+        fmesh = np.arange(0.,league.n_days+2.)            
+
+        for t in league.teams.values():
+            self.goal_rate[t.team_id] = Exponential('goal_rate_%i'%t.team_id,beta=1.)
+            self.def_rate[t.team_id] = Normal('def_rate_%i'%t.team_id,tau=1.,mu=0.)
+            self.home_adv[t.team_id] = Normal('home_adv_%i'%t.team_id,tau=1.,mu=0.)
+
+
+        for game in range(len(league.games)):
+            self.match_rate[2*game] = Poisson('match_rate_%i'%(2*game),
+                    mu=Deterministic(eval=clip_rate,
+                                     parents={'val':
+                                        self.goal_rate[league.games[game].hometeam.team_id] - 
+                                        self.def_rate[league.games[game].awayteam.team_id] +
+                                        self.home_adv[league.games[game].hometeam.team_id]},
+                                     doc='clipped goal rate',name='clipped_h_%i'%game),
+                    value=league.games[game].homescore, observed=True)
+            self.match_rate[2*game+1] = Poisson('match_rate_%i'%(2*game+1),
+                    mu=Deterministic(eval=clip_rate,
+                                     parents={'val':
+                                        self.goal_rate[league.games[game].awayteam.team_id] - 
+                                        self.def_rate[league.games[game].hometeam.team_id]},
+                                     doc='clipped goal rate',name='clipped_a_%i'%game),
+                    value=league.games[game].awayscore, observed=True)
+
+
+        for game in range(len(league.future_games)):
+            self.match_goals_future[2*game] = Poisson('match_goals_future_%i_home'%game,
+                    mu=Deterministic(eval=clip_rate,
+                                     parents={'val':
+                                        self.goal_rate[league.future_games[game][0].team_id] - 
+                                        self.def_rate[league.future_games[game][1].team_id] + self.home_adv},
+                                     doc='clipped goal rate',name='clipped_fut_h_%i'%game))
+
+            self.match_goals_future[2*game+1] = Poisson('match_goals_future_%i_away'%game,
+                    mu=Deterministic(eval=clip_rate,
+                                     parents={'val':
+                                        self.goal_rate[league.future_games[game][1].team_id] - 
+                                        self.def_rate[league.future_games[game][0].team_id]},
+                                     doc='clipped goal rate',name='clipped_fut_a_%i'%game))
+
+            self.outcome_future[game] = Deterministic(eval=outcome_eval,parents={
+                'home':self.match_goals_future[2*game],
+                'away':self.match_goals_future[2*game+1]},name='match_outcome_future_%i'%game,
+                dtype=int,doc='The outcome of the match'
+                )
+            
+    def run_mc(self,nsample = 10000,interactive=False,doplot=False,verbose=1):
+        """run the model using mcmc"""
+        from pymc import MCMC
+        self.M = MCMC(self)
+        if interactive:
+            self.M.isample(iter=nsample, burn=1000, thin=10,verbose=verbose)
+        else:
+            self.M.sample(iter=nsample, burn=1000, thin=10,verbose=verbose)
         if doplot:
             from pymc.Matplot import plot
             plot(self.M)
@@ -323,13 +413,13 @@ class Prediction(object):
         self.stats = np.zeros((13,len(self.predictions)))
         for n in range(len(self.predictions)):
             self.stats[:,n] = [league.n_days,0
-                               ,self.predictions[n][6],self.predictions[n][7],self.predictions[n][8]
-                               ,self.predictions[n][3],self.predictions[n][4],self.predictions[n][5]
+                               ,self.predictions[n][6],self.predictions[n][7],self.predictions[n][8] #prediction odds
+                               ,self.predictions[n][3],self.predictions[n][4],self.predictions[n][5] #implied odds
                                ,self.predictions[n][2]=='H',self.predictions[n][2]=='D',self.predictions[n][2]=='A',0,0]
             #TODO:spieltag into col 1
             self.stats[5:8,n] /= self.stats[5:8,n].sum()
-            self.stats[11,n] = np.abs(self.stats[2:5,n]-self.stats[8:11,n]).sum()
-            self.stats[12,n] = np.abs(self.stats[5:8,n]-self.stats[8:11,n]).sum()
+            self.stats[11,n] = np.abs(self.stats[2:5,n]-self.stats[8:11,n]).sum()#prediction odds
+            self.stats[12,n] = np.abs(self.stats[5:8,n]-self.stats[8:11,n]).sum()#implied odds
         
     
     def kellybet(self,odds,prob ):
@@ -441,7 +531,7 @@ def evaluate(fname='csv/1011/D1.csv',model=LeagueFullModel,samples=None):
 
 def run_it(n):
     print 'Starting day ',n
-    l = LeagueFullModel('csv/1011/D1.csv',n)
+    l = LeagueMultiHomeModel('csv/1011/D1.csv',n)
     l.run_mc(verbose=0)
     p = Prediction(l.league,l.outcome_future)
     print 'done ',n
@@ -458,8 +548,6 @@ def evaluate_mp(fname='csv/1011/D1.csv',model=LeagueFullModel,samples=None):
     return values
 
 if __name__ == '__main__':
-    fname='csv/1011/D1.csv'
-    model=LeagueFullModel
     from multiprocessing import Pool
     p = Pool(4)
     values = p.map(run_it,range(2,34))
