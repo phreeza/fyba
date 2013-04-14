@@ -366,7 +366,9 @@ class LeagueMultiHomeModel(object):
                     mu=Deterministic(eval=clip_rate,
                                      parents={'val':
                                         self.goal_rate[league.future_games[game][0].team_id] - 
-                                        self.def_rate[league.future_games[game][1].team_id] + self.home_adv},
+                                        self.def_rate[league.future_games[game][1].team_id] +
+                                        self.home_adv[league.future_games[game][0].team_id]
+                                        },
                                      doc='clipped goal rate',name='clipped_fut_h_%i'%game))
 
             self.match_goals_future[2*game+1] = Poisson('match_goals_future_%i_away'%game,
