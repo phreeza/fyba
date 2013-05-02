@@ -3,8 +3,6 @@ import numpy as np
 import pymc as pm
 import pymc.gp as gp
 
-
-
 class LeagueBasicModel(object):
     """MCMC model of a football league."""
     
@@ -77,7 +75,7 @@ class LeagueBasicModel(object):
                 dtype=int,doc='The outcome of the match'
                 )
             
-    def run_mc(self,nsample = 10000,interactive=False,doplot=False,verbose=1):
+    def run_mc(self,nsample = 10000,interactive=False,doplot=False,verbose=0):
         """run the model using mcmc"""
         from pymc import MCMC
         self.M = MCMC(self)
@@ -204,7 +202,7 @@ class LeagueFullModel(object):
                 dtype=int,doc='The outcome of the match'
                 )
             
-    def run_mc(self,nsample = 30000,interactive=False,doplot=False,verbose=1):
+    def run_mc(self,nsample = 30000,interactive=False,doplot=False,verbose=0):
         """run the model using mcmc"""
         from pymc import MCMC
         self.M = MCMC(self)
@@ -237,8 +235,8 @@ class LeagueDefenseModel(object):
                 return 0
             
         def clip_rate(val):
-            if val>0.2:return val
-            else: return 0.2
+            if val>0.1:return val
+            else: return 0.1
         self.goal_rate = np.empty(N,dtype=object)
         self.def_rate = np.empty(N,dtype=object)
         self.match_rate = np.empty(len(league.games)*2,dtype=object)
@@ -292,7 +290,7 @@ class LeagueDefenseModel(object):
                 dtype=int,doc='The outcome of the match'
                 )
             
-    def run_mc(self,nsample = 10000,interactive=False,doplot=False,verbose=1):
+    def run_mc(self,nsample = 10000,interactive=False,doplot=False,verbose=0):
         """run the model using mcmc"""
         from pymc import MCMC
         self.M = MCMC(self)
@@ -384,7 +382,7 @@ class LeagueMultiHomeModel(object):
                 dtype=int,doc='The outcome of the match'
                 )
             
-    def run_mc(self,nsample = 10000,interactive=False,doplot=False,verbose=1):
+    def run_mc(self,nsample = 10000,interactive=False,doplot=False,verbose=0):
         """run the model using mcmc"""
         from pymc import MCMC
         self.M = MCMC(self)
@@ -486,11 +484,23 @@ class League():
             'Unterhaching': Team("Unterhaching")}
     """
     def __init__(self, fname, playedto=None):
+        import numpy as np
+        
         csv_file = file(fname)
+        
+        home_odds_names = ['B365H','BSH','BWH','GBH','IWH','LBH','PSH','SOH','SBH','SJH','SYH','VCH','WHH']
+        away_odds_names = ['B365A','BSA','BWA','GBA','IWA','LBA','PSA','SOA','SBA','SJA','SYA','VCA','WHA']
+        draw_odds_names = ['B365D','BSD','BWD','GBD','IWD','LBD','PSD','SOD','SBD','SJD','SYD','VCD','WHD']
+        
         data = []
         for line in csv_file.readlines():
             data.append(line.split(','))
-        teamnames = set(t[3] for t in data[1:])
+        teamnames = set(t[3].strip() for t in data[1:])
+        
+        home_odds_ind = [n for n in range(len(data[0])) if data[0][n] in home_odds_names]
+        away_odds_ind = [n for n in range(len(data[0])) if data[0][n] in away_odds_names]
+        draw_odds_ind = [n for n in range(len(data[0])) if data[0][n] in draw_odds_names]
+        
         self.teams = dict((t,Team(t)) for t in teamnames)
         self.n_teams = len(self.teams)
         self.n_days = 2*(len(data)-1)/self.n_teams
@@ -505,20 +515,23 @@ class League():
         self.games = []
         for gameline in data[1:playedto+1]:
             self.games.append(Game(
-                self.teams[gameline[2]],self.teams[gameline[3]],
+                self.teams[gameline[2].strip()],self.teams[gameline[3].strip()],
                 int(gameline[4]), int(gameline[5])
                 ))
         
         self.future_games = []
         if playedto < len(data)-1-len(self.teams)/2:
             for gameline in data[playedto+1:playedto+1+len(self.teams)/2]:
+                home_odds = np.array([float(gameline[n]) for n in home_odds_ind if len(gameline[n])>0]).mean()
+                away_odds = np.array([float(gameline[n]) for n in away_odds_ind if len(gameline[n])>0]).mean()
+                draw_odds = np.array([float(gameline[n]) for n in draw_odds_ind if len(gameline[n])>0]).mean()
                 self.future_games.append(
-                    [self.teams[gameline[2]],self.teams[gameline[3]],gameline[6],
-                     1./float(gameline[22]),1./float(gameline[23]),1./float(gameline[24])]
+                    [self.teams[gameline[2].strip()],self.teams[gameline[3].strip()],gameline[6],
+                     1./home_odds,1./draw_odds,1./away_odds]
                     )
                 
                 
-def evaluate(fname='csv/1011/D1.csv',model=LeagueFullModel,samples=None):
+def evaluate(fname='csv/1011/D1.csv',model=LeagueDefenseModel,samples=None):
     values = []
     for n in range(3,34):
         l = model(fname,n)
@@ -531,12 +544,14 @@ def evaluate(fname='csv/1011/D1.csv',model=LeagueFullModel,samples=None):
         print values
     return values
 
-def run_it(n):
-    print 'Starting day ',n
-    l = LeagueMultiHomeModel('csv/1011/D1.csv',n)
+def run_it(param):
+    n = param[1]
+    lf = param[0]
+    print 'Starting day ',n,'of league',lf
+    l = LeagueDefenseModel(lf,n)
     l.run_mc(verbose=0)
     p = Prediction(l.league,l.outcome_future)
-    print 'done ',n
+    print 'done ',n,lf
     p.stats[0,:] = float(n)
     ret = p.stats[:]
     del l
@@ -552,7 +567,15 @@ def evaluate_mp(fname='csv/1011/D1.csv',model=LeagueFullModel,samples=None):
 if __name__ == '__main__':
     from multiprocessing import Pool
     p = Pool(4)
-    values = p.map(run_it,range(2,34))
+    
+    files = ['csv/0809/D2.csv','csv/1112/D2.csv','csv/0910/D2.csv','csv/1011/D2.csv']
+    params = []
+    for f in files:
+        l = League(f)
+        for n in range(2,l.n_days):
+            params.append((f,n))
+    
+    values = p.map(run_it,params,chunksize=1)
     values = np.hstack(values)
     print values
     np.save('result',values)
