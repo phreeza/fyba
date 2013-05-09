@@ -2,4 +2,6 @@
 *.swp
 *.csv
 *.pyc
+*.npy
+*.npz
 .DS_Store
